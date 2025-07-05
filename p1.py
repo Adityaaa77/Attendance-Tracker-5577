@@ -2,99 +2,105 @@ import streamlit as st
 import pyrebase
 import random
 
-# 🎨 Random background color
+# 🔥 Firebase Configuration (replace with your actual project values if needed)
+firebaseConfig = {
+    "apiKey": "AIzaSyD_rM1h0KGwEfNNZud5isKJ-yR99P1DKww",
+    "authDomain": "attendance-tracker-8d858.firebaseapp.com",
+    "databaseURL": "https://attendance-tracker-8d858-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    "storageBucket": "attendance-tracker-8d858.appspot.com"
+}
+
+# Initialize Firebase
+firebase = pyrebase.initialize_app(firebaseConfig)
+db = firebase.database()
+
+# 🎨 Random Background Color
 def set_random_bg_color():
     colors = ["#FFDEE9", "#B5FFFC", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#A0C4FF", "#FFC6FF"]
     selected = random.choice(colors)
     st.markdown(f"<style>body {{background-color: {selected};}}</style>", unsafe_allow_html=True)
 
 set_random_bg_color()
-st.title("📚 Attendance Tracker App")
+st.title("📚 Attendance Tracker (Firebase Edition)")
 
-# 🔥 Firebase Config
-firebase_config = {
-    "apiKey": "AIzaSyD_rM1h0KGwEfNNZud5isKJ-yR99P1DKww",
-    "authDomain": "attendance-tracker-8d858.firebaseapp.com",
-    "databaseURL": "https://attendance-tracker-8d858-default-rtdb.firebaseio.com/",
-    "projectId": "attendance-tracker-8d858",
-    "storageBucket": "attendance-tracker-8d858.appspot.com",
-    "messagingSenderId": "515015641247",
-    "appId": "1:515015641247:web:9f44ae28a7f9801228faaa"
-}
+# 🧠 User Input (Session)
+user = st.text_input("👤 Enter your name to continue:")
 
-firebase = pyrebase.initialize_app(firebase_config)
-db = firebase.database()
-
-# 🧠 Ask for username
-user = st.text_input("👤 Enter your name to continue")
-
-if not user:
-    st.warning("Please enter your name to access your data.")
-    st.stop()
-
-# 🔁 Load user data from Firebase
+# 🔁 Load data from Firebase
 def load_user_data(user):
-    data = db.child(user).get().val()
-    return data if data else {}
+    try:
+        if user:
+            data = db.child(user).get().val()
+            return data if data else {}
+        return {}
+    except Exception as e:
+        st.error(f"Firebase Load Error: {e}")
+        return {}
 
-# 💾 Save user data to Firebase
+# 💾 Save data to Firebase
 def save_user_data(user, data):
-    db.child(user).set(data)
+    try:
+        db.child(user).set(data)
+    except Exception as e:
+        st.error(f"Firebase Save Error: {e}")
 
-if "subjects" not in st.session_state:
-    st.session_state.subjects = load_user_data(user)
+# 🧠 Load to session
+if user:
+    if "subjects" not in st.session_state:
+        st.session_state.subjects = load_user_data(user)
 
-# ➕ Add Subject
-with st.form("add_form"):
-    subject = st.text_input("📘 New Subject")
-    submitted = st.form_submit_button("Add Subject")
-    if submitted:
-        if subject:
-            subjects = st.session_state.subjects
-            if subject not in subjects:
-                subjects[subject] = {"present": 0, "absent": 0}
-                save_user_data(user, subjects)
-                st.success(f"✅ Added subject '{subject}'")
-            else:
-                st.warning("⚠️ Subject already exists.")
-        else:
-            st.error("Please enter a subject name.")
-
-# 📋 Display Subjects & Attendance
-subs = st.session_state.subjects
-if subs:
-    for subject, data in subs.items():
-        st.subheader(f"📘 {subject}")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("✅ Present", key=f"present_{subject}"):
-                subs[subject]["present"] += 1
-        with col2:
-            if st.button("❌ Absent", key=f"absent_{subject}"):
-                subs[subject]["absent"] += 1
-        with col3:
-            if st.button("🗑️ Delete Subject", key=f"del_{subject}"):
-                del subs[subject]
+    # ➕ Add New Subject
+    with st.form("add_subject"):
+        new_subject = st.text_input("➕ Add New Subject")
+        add = st.form_submit_button("Add")
+        if add and new_subject:
+            subs = st.session_state.subjects
+            if new_subject not in subs:
+                subs[new_subject] = {"present": 0, "absent": 0}
                 save_user_data(user, subs)
-                st.experimental_rerun()
+                st.success(f"Subject '{new_subject}' added!")
+            else:
+                st.warning("Subject already exists!")
 
-        present = data["present"]
-        absent = data["absent"]
-        total = present + absent
-        percentage = (present / total) * 100 if total > 0 else 0
+    # 📋 Attendance Controls
+    subs = st.session_state.subjects
+    if subs:
+        for subject in list(subs.keys()):
+            st.subheader(f"📘 {subject}")
+            col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
 
-        st.info(f"✅ Present: {present}, ❌ Absent: {absent}, 📊 Percentage: {percentage:.2f}%")
-        st.progress(int(percentage))
+            with col1:
+                if st.button("✅ Present", key=f"present_{subject}"):
+                    subs[subject]["present"] += 1
 
-        if st.button("🔁 Reset Attendance", key=f"reset_{subject}"):
-            subs[subject] = {"present": 0, "absent": 0}
-            save_user_data(user, subs)
-            st.experimental_rerun()
+            with col2:
+                if st.button("❌ Absent", key=f"absent_{subject}"):
+                    subs[subject]["absent"] += 1
 
-        st.markdown("---")
+            with col3:
+                if st.button("🗑️ Delete Subject", key=f"delete_{subject}"):
+                    del subs[subject]
+                    save_user_data(user, subs)
+                    st.experimental_rerun()
 
-    save_user_data(user, subs)
+            with col4:
+                if st.button("🔁 Reset", key=f"reset_{subject}"):
+                    subs[subject] = {"present": 0, "absent": 0}
+
+            # 📊 Attendance Stats
+            present = subs[subject]["present"]
+            absent = subs[subject]["absent"]
+            total = present + absent
+            percentage = (present / total * 100) if total > 0 else 0
+            st.info(f"✅ Present: {present} | ❌ Absent: {absent} | 📈 Percentage: {percentage:.2f}%")
+            st.progress(int(percentage))
+            st.markdown("---")
+
+        # 💾 Save on any change
+        save_user_data(user, subs)
+    else:
+        st.info("Add a subject to begin tracking attendance!")
+
+    st.caption("✨ App by Aditya Rajpal, powered by Firebase ☁️")
 else:
-    st.info("No subjects added yet. Start by adding one!")
-
-st.caption("✨ Made with 💖 by Adii Darling")
+    st.warning("Please enter your name to start tracking attendance.")
